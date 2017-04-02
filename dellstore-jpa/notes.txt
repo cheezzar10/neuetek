@@ -1,0 +1,27 @@
+1. creating database and loading it with data
+
+# sudo -u postgres psql -c "create user dellstore2 with createdb password 'password'"
+# psql -U dellstore2 -d template1 -h 10.0.1.202
+template1=> create database dellstore2;
+# psql -U dellstore2 -f dellstore2-normal-1.0.sql -h 10.0.1.202
+
+2. checking that database was successfully restored
+
+# psql -U dellstore2 -h 10.0.1.202
+dellstore2=> select pg_size_pretty(pg_database_size('dellstore2'));
+dellstore2=> show autovacuum;
+dellstore2=> select relname, seq_scan, vacuum_count, autovacuum_count, analyze_count, last_analyze, autoanalyze_count, last_autoanalyze from pg_stat_user_tables;
+dellstore2=> select oid, relname, relpages, reltuples, pg_stat_get_live_tuples(oid) as live_tuples, pg_stat_get_dead_tuples(oid) as dead_tuples, pg_size_pretty(pg_relation_size(oid)) from pg_class where relname = 'customers';
+dellstore2=> select relid, relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_live_tup, n_dead_tup from pg_stat_user_tables where relname = 'customers';
+
+3. forcing manual statistics collection
+dellstore2=> vacuum verbose analyse;
+
+4. checking query plan
+dellstore2=> explain analyze select * from customers where customerid = 1000;
+dellstore2=> explain (analyze on, buffers on) select * from customers where customerid = 1000;
+
+5. reviewing table IO statistics
+dellstore2=> select pg_stat_reset();
+dellstore2=> select relid, relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_live_tup, n_dead_tup from pg_stat_user_tables where relname = 'customers';
+dellstore2=> select relid, relname, heap_blks_read, heap_blks_hit, idx_blks_read, idx_blks_hit from pg_statio_user_tables where relname = 'customers';
