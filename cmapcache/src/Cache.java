@@ -2,42 +2,64 @@ import java.util.Map;
 
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 // it's not a cache but TX specific objects storage
 public class Cache {
-	private final ConcurrentMap<String, FutureTask<Integer>> cache = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, CacheValue<Integer>> cache = new ConcurrentHashMap<>();
 	// miltuple TX service requests detector
 	private final ConcurrentMap<String, AtomicInteger> detector = new ConcurrentHashMap<>();
 
-	public Integer get(final String txId) {
-		FutureTask<Integer> loader = cache.get(txId);
-		if (loader == null) {
-			loader = new FutureTask<>(() -> getObject(txId));
-			FutureTask<Integer> concurrentLoader = cache.putIfAbsent(txId, loader);
-			if (concurrentLoader == null) {
-				loader.run();
+	public Integer get(String txId) {
+		CacheValue<Integer> value = cache.get(txId);
+		if (value == null) {
+			value = new CacheValue<>(new FutureTask<>(() -> getObject(txId)));
+			CacheValue<Integer> prlValue = cache.putIfAbsent(txId, value);
+			if (prlValue == null) {
+				value.getLoader().run();
 			} else {
-				loader = concurrentLoader;
+				value = prlValue;
 			}
 		}
 		
 		try {
-			return loader.get();
+			return value.getLoader().get();
 		} catch (InterruptedException interruptedEx) {
 			throw new IllegalStateException("loading was interrupted", interruptedEx);
 		} catch (Exception ex) {
-			boolean removed = cache.remove(txId, loader);
+			boolean removed = cache.remove(txId, value);
 			if (removed) {
 				// System.out.printf("%s failed loading activity for key %s removed%n", Thread.currentThread().getName(), txId);
 			}
 			throw transformException(ex);
+		}
+	}
+	
+	public Integer get(String key, boolean check) {
+		CacheValue<Integer> value = cache.get(key);
+		if (value != null && check && !value.isValid()) {
+			cache.remove(key, value);
+		}
+		
+		return get(key);
+	}
+	
+	public void invalidate(String key) {
+		System.out.printf("invalidating: %s%n", key);
+		CacheValue<Integer> value = cache.get(key);
+		if (value != null) {
+			boolean invalidated = cache.replace(key, value, new CacheValue<>(false, value.getLoader()));
+			if (invalidated) {
+				System.out.printf("%s invalidated%n", key);
+				AtomicInteger count = detector.get(key);
+				if (count != null) {
+					count.decrementAndGet();
+				}
+			}
 		}
 	}
 	
@@ -91,7 +113,7 @@ public class Cache {
 		// check that cache contains only successfully loaded entries
 		cache.forEach((k, v) -> {
 			try {
-				Integer i = v.get();
+				v.getLoader().get();
 			} catch (Exception ex) {
 				throw new IllegalStateException("cache contains failed activities");
 			}

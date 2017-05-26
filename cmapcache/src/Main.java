@@ -3,7 +3,8 @@ import static java.lang.System.out;
 public class Main {
 	public static void main(String[] args) {
 		out.println("started");
-		fillUsingNThreads(12);
+		fillUsingNThreads(4);
+		out.println("completed");
 	}
 
 	private static void fillUsingNThreads(int threadCount) {
