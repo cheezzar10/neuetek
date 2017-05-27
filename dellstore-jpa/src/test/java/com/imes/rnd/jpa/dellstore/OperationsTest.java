@@ -1,12 +1,12 @@
 package com.imes.rnd.jpa.dellstore;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
-import javax.persistence.EntityTransaction;
 import javax.persistence.Persistence;
 
 import org.hibernate.SQLQuery;
@@ -33,32 +33,47 @@ public class OperationsTest {
 	
 	@Test
 	public void testCustomerOperations() {
+		Stream<Object[]> resultStream = null;
+		
 		try (AutoCloseableEntityManager emWrapper = new AutoCloseableEntityManager(emf)) {
 			EntityManager em = emWrapper.getEntityManager();
-			
-			EntityTransaction tx = em.getTransaction();
-			tx.begin();
 			
 			Customer customer = em.find(Customer.class, 1);
 			Assert.assertNotNull(customer);
 			
 			Session session = em.unwrap(Session.class);
 			
+			// select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers
+			String query = "select c.customerid, c.firstname, c.lastname, c.address1, c.phone, c.email, c.creditcard, c.username, c.password, o.orderdate, o.totalamount from customers c join orders o on o.customerid = c.customerid";
+			
 			if (Math.abs(-1) == 2) {
-				testSQLQueryList(session);
+				testSQLQueryList(session, query);
 			}
 			
-			testSQLQueryStreaming(session);
+			long start = System.currentTimeMillis();
+			resultStream = executeQueryUsingStreaming(session, query);
+			System.out.printf("query execution time %d ms%n", System.currentTimeMillis() - start);
 			
-			tx.commit();
+			start = System.currentTimeMillis();
+			double totalAmount = resultStream.mapToDouble(r -> ((BigDecimal)r[10]).doubleValue()).sum();
+			System.out.printf("total amount calculation time %d ms%n", System.currentTimeMillis() - start);
+			Assert.assertTrue(totalAmount == 2567386.79);
 		}
 	}
 
-	private void testSQLQueryList(Session session) {
-		SQLQuery query = session.createSQLQuery("select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers");
+	void pause(long millis) {
+		try {
+			Thread.sleep(millis);
+		} catch (InterruptedException intrEx) {
+			return;
+		}
+	}
+
+	private void testSQLQueryList(Session session, String query) {
+		SQLQuery sqlQuery = session.createSQLQuery("select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers");
 		
 		@SuppressWarnings("unchecked")
-		List<Object[]> result = query.list();
+		List<Object[]> result = sqlQuery.list();
 		
 		int count = 0;
 		for (Object[] row : result) {
@@ -70,10 +85,8 @@ public class OperationsTest {
 		Assert.assertEquals(20000, count);
 	}
 	
-	private void testSQLQueryStreaming(Session session) {
-		SQLQuery query = session.createSQLQuery("select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers");
-		Stream<Object[]> resultStream = StreamSupport.stream(new SQLQueryResultSpliterator(query), false);
-		long count = resultStream.count();
-		Assert.assertEquals(20000, count);
+	private Stream<Object[]> executeQueryUsingStreaming(Session session, String query) {
+		SQLQuery sqlQuery = session.createSQLQuery(query);
+		return StreamSupport.stream(new SQLQueryResultSpliterator(sqlQuery), false);
 	}
 }
