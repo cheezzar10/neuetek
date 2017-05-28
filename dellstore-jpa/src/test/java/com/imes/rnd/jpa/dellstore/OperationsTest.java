@@ -44,7 +44,8 @@ public class OperationsTest {
 			Session session = em.unwrap(Session.class);
 			
 			// select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers
-			String query = "select c.customerid, c.firstname, c.lastname, c.address1, c.phone, c.email, c.creditcard, c.username, c.password, o.orderdate, o.totalamount from customers c join orders o on o.customerid = c.customerid";
+			String query = "select c.customerid, c.firstname, c.lastname, c.address1, c.phone, c.email, c.creditcard, c.username, c.password, o.orderdate, o.totalamount "
+					+ " from customers c join orders o on o.customerid = c.customerid";
 			
 			if (Math.abs(-1) == 2) {
 				testSQLQueryList(session, query);
@@ -70,10 +71,11 @@ public class OperationsTest {
 	}
 
 	private void testSQLQueryList(Session session, String query) {
-		SQLQuery sqlQuery = session.createSQLQuery("select customerid, firstname, lastname, address1, phone, email, creditcard, username, password from customers");
+		SQLQuery sqlQuery = session.createSQLQuery(query);
 		
 		@SuppressWarnings("unchecked")
 		List<Object[]> result = sqlQuery.list();
+		System.out.printf("list type: %s%n", result.getClass());
 		
 		int count = 0;
 		for (Object[] row : result) {
