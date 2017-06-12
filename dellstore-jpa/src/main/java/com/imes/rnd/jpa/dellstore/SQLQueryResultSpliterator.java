@@ -8,22 +8,24 @@ import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
 
 public class SQLQueryResultSpliterator implements Spliterator<Object[]> {
-private static final ScrollMode SCROLL_MODE = ScrollMode.SCROLL_INSENSITIVE; 
+private static final ScrollMode DEFAULT_SCROLL_MODE = ScrollMode.SCROLL_INSENSITIVE; 
 	
 	private final ScrollableResults cursor;
 	private final int column;
+	private final int scrollingPause;
 
 	public SQLQueryResultSpliterator(SQLQuery query) {
-		this(query, -1, SCROLL_MODE);
+		this(query, -1, DEFAULT_SCROLL_MODE, -1);
 	}
 	
 	public SQLQueryResultSpliterator(SQLQuery query, int column) {
-		this(query, column, SCROLL_MODE);
+		this(query, column, DEFAULT_SCROLL_MODE, -1);
 	}
 	
-	private SQLQueryResultSpliterator(SQLQuery query, int column, ScrollMode scrollMode) {
+	private SQLQueryResultSpliterator(SQLQuery query, int column, ScrollMode scrollMode, int pause) {
 		this.cursor = query.scroll(scrollMode);
 		this.column = column;
+		scrollingPause = pause;
 	}
 
 	@Override
@@ -34,10 +36,29 @@ private static final ScrollMode SCROLL_MODE = ScrollMode.SCROLL_INSENSITIVE;
 			} else {
 				action.accept(new Object[] { cursor.get(column) });
 			}
+			
+			boolean interrupted = pause();
+			if (interrupted) {
+				return false;
+			}
+			
 			return true;
 		} else {
 			return false;
 		}
+	}
+	
+	private boolean pause() {
+		if (scrollingPause > 0) {
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException interuptedEx) {
+				Thread.currentThread().interrupt();
+				return true;
+			}
+		}
+		
+		return false;
 	}
 
 	@Override
