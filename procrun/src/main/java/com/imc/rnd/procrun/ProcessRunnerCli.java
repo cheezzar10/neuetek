@@ -1,8 +1,11 @@
 package com.imc.rnd.procrun;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
@@ -28,8 +31,16 @@ public class ProcessRunnerCli {
 		System.out.printf("working directory: %s%n", cwd);
 		
 		Path cwdPath = Paths.get(cwd);
-		Process proc = new ProcessBuilder(cwdPath.resolve("dummy").toString(), "30")
+
+		FileSystem zipFs = FileSystems.newFileSystem(cwdPath.resolve("input.data.zip"), 
+				Thread.currentThread().getContextClassLoader());
+		Path inputDataPath = zipFs.getPath("input.data");
+		System.out.printf("stdio set to: %s%n", inputDataPath);
+		File inputFile = new File(zipFs.toString());
+		System.out.printf("f: %s%n", inputFile);
+		Process proc = new ProcessBuilder(cwdPath.resolve("dummy").toString(), "3")
 				.inheritIO()
+				.redirectInput(ProcessBuilder.Redirect.from(inputFile))
 				.start();
 		
 		boolean exited = proc.waitFor(2, TimeUnit.SECONDS);
@@ -38,7 +49,7 @@ public class ProcessRunnerCli {
 			System.out.printf("process completed - exit status: %d%n", exitStatus);
 		} else {
 			System.out.println("trying to terminate process");
-			proc.destroy();
+			proc.destroyForcibly();
 			
 			// waiting one second for termination
 			boolean terminated = proc.waitFor(1, TimeUnit.SECONDS);
