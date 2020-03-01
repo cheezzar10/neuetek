@@ -1,0 +1,18 @@
+1. how to run simulation using gatling
+
+setUp method: defined in abstract class Simulation.
+takes a sequence of population builders
+
+2. how is that during function works
+
+the canonical example is to use scenario method and then start it using the following
+call sequence:
+
+setUp(scenario.inject(atOnceUsers(1))).protocols(httpProto)
+
+so, core.Predef.scenario(scenarioName: String): ScenarioBuilder
+so sequence of exec, pause etc still returns ScenarioBuilder
+but inject call will return PopulationBuilder and that is exactly that we 
+need to pass to setUp method
+
+Predef.during(duration: Duration)(chain: ChainBuilder)
